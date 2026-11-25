@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "AeCpt 科研工作台",
+    "description": "将 DeepSeek Harness (DSH) 连接到课题组自托管的 AeCpt 服务端，提供学生工作台概览、教学周科研进展（对话碎片汇总、AI 一键提炼周报与导师反馈）、个人计划与共享、本机文献订阅（期刊 RSS/Atom、arXiv 与博客）及课题组公用论文库（DOI/arXiv 投稿、检索、PDF 下载与 BibTeX 导出）。凭据保存在 DSH 凭据库中。",
+    "detail": "docs/DETAIL.md"
+  }
+}

@@ -1,0 +1,129 @@
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Build, test and pack only (do not publish to npm)'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: publish-npm
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+
+      - name: Verify package metadata and tag alignment
+        id: meta
+        run: |
+          PKG_NAME=$(node -p "require('./package.json').name")
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          PKG_PRIVATE=$(node -p "Boolean(require('./package.json').private)")
+          echo "Package: ${PKG_NAME}@${PKG_VERSION} (private=${PKG_PRIVATE})"
+          if [ "$PKG_PRIVATE" = "true" ]; then
+            echo "::error::package.json still has private=true"
+            exit 1
+          fi
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            EXPECTED="v${PKG_VERSION}"
+            if [ "${GITHUB_REF_NAME}" != "${EXPECTED}" ]; then
+              echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version (${EXPECTED})"
+              exit 1
+            fi
+          fi
+          if [[ "$PKG_VERSION" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Ensure repository metadata for npm provenance
+        run: |
+          HAS_REPO=$(node -p "Boolean(require('./package.json').repository)")
+          if [ "$HAS_REPO" != "true" ]; then
+            echo "No repository field in package.json; populating from GITHUB_REPOSITORY=${GITHUB_REPOSITORY}"
+            npm pkg set repository.type=git "repository.url=git+https://github.com/${GITHUB_REPOSITORY}.git"
+            npm pkg set "homepage=https://github.com/${GITHUB_REPOSITORY}#readme"
+            npm pkg set "bugs.url=https://github.com/${GITHUB_REPOSITORY}/issues"
+          fi
+
+      - name: Build and test
+        run: |
+          npm run build
+          npm test
+          npm pack --dry-run
+
+      - name: Publish to npm (OIDC Trusted Publishing or NPM_TOKEN)
+        if: ${{ inputs.dry_run != true }}
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          REPO_PRIVATE: ${{ github.event.repository.private }}
+          IS_PRERELEASE: ${{ steps.meta.outputs.prerelease }}
+        run: |
+          PUBLISH_ARGS=(--access public)
+          if [ "$REPO_PRIVATE" != "true" ]; then
+            PUBLISH_ARGS+=(--provenance)
+          else
+            echo "::warning::Repository is private; skipping --provenance (npm provenance requires a public repository)."
+          fi
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            PUBLISH_ARGS+=(--tag next)
+          fi
+
+          if [ -n "$NPM_TOKEN" ]; then
+            echo "Publishing with NPM_TOKEN (${PUBLISH_ARGS[*]})..."
+            NODE_AUTH_TOKEN="$NPM_TOKEN" npm publish "${PUBLISH_ARGS[@]}"
+          else
+            echo "No NPM_TOKEN secret set; publishing via npm OIDC Trusted Publishing (${PUBLISH_ARGS[*]})..."
+            # Remove placeholder NODE_AUTH_TOKEN line written by actions/setup-node
+            # so npm CLI uses native GitHub OIDC Trusted Publishing.
+            if [ -n "${NPM_CONFIG_USERCONFIG:-}" ] && [ -f "$NPM_CONFIG_USERCONFIG" ]; then
+              grep -v '_authToken=' "$NPM_CONFIG_USERCONFIG" > "${NPM_CONFIG_USERCONFIG}.tmp" || true
+              mv "${NPM_CONFIG_USERCONFIG}.tmp" "$NPM_CONFIG_USERCONFIG"
+            fi
+            # npm OIDC Trusted Publishing requires npm >= 11.5.1.
+            node -e 'const [a,b,c]=process.argv[1].split(".").map((n)=>parseInt(n,10)||0); process.exit(a>11||(a===11&&(b>5||(b===5&&c>=1)))?0:1)' "$(npm --version)" \
+              || npm install -g npm@latest
+            npm --version
+            npm publish "${PUBLISH_ARGS[@]}"
+          fi
+
+      - name: Create GitHub Release
+        if: ${{ github.ref_type == 'tag' && inputs.dry_run != true }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IS_PRERELEASE: ${{ steps.meta.outputs.prerelease }}
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            echo "Release ${GITHUB_REF_NAME} already exists, skipping."
+          else
+            RELEASE_ARGS=(--title "${GITHUB_REF_NAME}" --generate-notes)
+            if [ "$IS_PRERELEASE" = "true" ]; then
+              RELEASE_ARGS+=(--prerelease)
+            fi
+            gh release create "${GITHUB_REF_NAME}" "${RELEASE_ARGS[@]}"
+          fi

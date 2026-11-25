@@ -1,0 +1,77 @@
+{
+  "name": "dsh-aecpt",
+  "version": "0.1.0",
+  "license": "MIT",
+  "type": "module",
+  "description": "AeCpt student research workbench plugin for DeepSeek Harness (DSH)",
+  "homepage": "https://github.com/yhong91/dsh-aecpt#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yhong91/dsh-aecpt.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yhong91/dsh-aecpt/issues"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "aecpt",
+    "research",
+    "workbench"
+  ],
+  "engines": {
+    "dsh": "^0.2.3-alpha.2"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./dist/client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "binding.js",
+    "prompts.js",
+    "feeds.js",
+    "library.js",
+    "dist/",
+    "store.js",
+    "diff3.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "docs",
+    "icon.svg",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "scripts": {
+    "build": "node build-client.js",
+    "test": "node --test tests/",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "overrides": {
+    "katex": "$katex"
+  },
+  "devDependencies": {
+    "@uiw/react-md-editor": "4.2.4",
+    "esbuild": "0.28.2",
+    "katex": "0.19.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "react-markdown": "10.1.0",
+    "rehype-katex": "7.0.1",
+    "rehype-sanitize": "6.0.0",
+    "remark-math": "6.0.0",
+    "unist-util-visit": "5.2.0"
+  }
+}

@@ -1,0 +1,354 @@
+.aecpt-plan {
+  container-type: inline-size;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  color: var(--dsw-alias-label-primary);
+}
+
+.aecpt-plan :is(h2, h3, p) {
+  margin: 0;
+}
+
+.aecpt-plan :is(h2, h3) {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.aecpt-plan :is(button, input, select, textarea) {
+  box-sizing: border-box;
+  min-width: 0;
+  font: inherit;
+  font-size: 13px;
+  color: inherit;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: transparent;
+}
+
+.aecpt-plan :is(input, select, textarea) {
+  display: block;
+  width: 100%;
+  padding: 7px 9px;
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.aecpt-plan textarea {
+  resize: vertical;
+}
+
+.aecpt-plan button {
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.aecpt-plan button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.aecpt-plan button:hover:not(:disabled),
+.aecpt-plan button[aria-pressed='true'] {
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.aecpt-plan button[aria-pressed='true'] {
+  border-color: var(--dsw-alias-brand-primary);
+}
+
+.aecpt-plan :is(button, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: 2px;
+}
+
+.aecpt-plan button.aecpt-plan-primary {
+  border-color: transparent;
+  background: var(--dsw-alias-label-primary);
+  color: var(--dsw-alias-bg-base);
+}
+
+.aecpt-plan button.aecpt-plan-primary:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.aecpt-plan button.aecpt-plan-text-button {
+  padding: 2px 4px;
+  border-color: transparent;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.aecpt-plan-toolbar,
+.aecpt-plan-calendar-bar,
+.aecpt-plan-form-options,
+.aecpt-plan-share-bar,
+.aecpt-plan-notice,
+.aecpt-plan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.aecpt-plan-toolbar,
+.aecpt-plan-calendar-bar,
+.aecpt-plan-form-options,
+.aecpt-plan-share-bar,
+.aecpt-plan-notice {
+  justify-content: space-between;
+}
+
+.aecpt-plan-muted,
+.aecpt-plan-count,
+.aecpt-plan-row-meta,
+.aecpt-plan-form-options {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.aecpt-plan-error {
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.aecpt-plan-form,
+.aecpt-plan-sharing,
+.aecpt-plan-calendar,
+.aecpt-plan-group,
+.aecpt-plan-day,
+.aecpt-plan-notice {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.aecpt-plan-form,
+.aecpt-plan-sharing,
+.aecpt-plan-share-preview,
+.aecpt-plan-share-recipient,
+.aecpt-plan-share-errors {
+  display: grid;
+  gap: 8px;
+}
+
+.aecpt-plan-sharing {
+  overflow-wrap: anywhere;
+}
+
+.aecpt-plan-share-recipient {
+  gap: 4px;
+  font-size: 13px;
+}
+
+.aecpt-plan-share-preview {
+  padding: 8px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 8px;
+}
+
+.aecpt-plan-snapshot {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.aecpt-plan-snapshot dt {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.aecpt-plan-snapshot dd {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.aecpt-plan-shares {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.aecpt-plan-shares > li {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--dsw-alias-border-l1);
+}
+
+.aecpt-plan-shares summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.aecpt-plan-shares details > :not(summary) {
+  margin-top: 6px;
+}
+
+.aecpt-plan-form-head {
+  display: flex;
+  gap: 6px;
+}
+
+.aecpt-plan-title-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.aecpt-plan-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+  gap: 8px;
+}
+
+.aecpt-plan-fields label {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.aecpt-plan-fields :is(input, select, textarea) {
+  color: var(--dsw-alias-label-primary);
+}
+
+.aecpt-plan-notes-field {
+  grid-column: 1 / -1;
+}
+
+.aecpt-plan-form-footer {
+  justify-content: flex-end;
+}
+
+.aecpt-plan-group > summary {
+  cursor: pointer;
+}
+
+.aecpt-plan-group-label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.aecpt-plan-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.aecpt-plan-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.aecpt-plan-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--dsw-alias-border-l1);
+}
+
+.aecpt-plan-row-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.aecpt-plan-row .aecpt-plan-actions {
+  flex-shrink: 0;
+}
+
+.aecpt-plan-row-title {
+  font-weight: 600;
+}
+
+.aecpt-plan-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 10px;
+}
+
+.aecpt-plan-row-notes {
+  color: var(--dsw-alias-label-secondary);
+  white-space: pre-wrap;
+  font-size: 13px;
+}
+
+.aecpt-plan-calendar-bar {
+  margin-bottom: 8px;
+}
+
+.aecpt-plan-month {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 3px;
+}
+
+.aecpt-plan-month th {
+  text-align: center;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.aecpt-plan-month :is(th, td) {
+  padding: 0;
+}
+
+.aecpt-plan-month button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  min-height: 43px;
+  padding: 3px 0;
+  border-color: var(--dsw-alias-border-l1);
+  line-height: 1.25;
+}
+
+.aecpt-plan-month button.aecpt-plan-other-month {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.aecpt-plan-month button[aria-current='date'] > span:first-child {
+  color: var(--dsw-alias-brand-primary);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.aecpt-plan-day-count {
+  max-width: 100%;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-2);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.aecpt-plan-day > :is(.aecpt-plan-muted, .aecpt-plan-group) {
+  margin-top: 8px;
+}
+
+.aecpt-plan-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@container (max-width: 340px) {
+  .aecpt-plan-row {
+    flex-direction: column;
+  }
+}

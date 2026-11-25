@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "AeCpt research workbench",
+    "description": "Connects DeepSeek Harness (DSH) to a self-hosted AeCpt server for the student workbench: overview home, teaching-week progress entries (session fragment collection, one-click AI report compilation, and supervisor feedback), personal plans and sharing, local RSS/Atom/arXiv literature subscriptions, and the research group's shared paper library (DOI/arXiv submission, search, PDF download, BibTeX export). Credentials live in the DSH credential store.",
+    "detail": "docs/DETAIL.md"
+  }
+}
