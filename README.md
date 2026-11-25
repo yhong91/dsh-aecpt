@@ -112,7 +112,7 @@ dsh-aecpt/
 ├── library-panel.js       # 「论文库」公用库 / 我的投稿 / 提交论文三视图
 ├── workbench.css          # 工作台主样式（全量使用 DSH 主题 CSS 变量，零硬编码色值）
 ├── build-client.js        # esbuild 浏览器端打包脚本（产物输出至 dist/client.js）
-├── tests/                 # Node 原生单元测试（node --test tests/）
+├── tests/                 # Node 原生单元测试（npm test）
 └── docs/
     ├── DETAIL.md          # DSH 插件详情页说明
     └── SERVER_API.md      # 学生可用服务端 API 与 Host 代理接口手册
