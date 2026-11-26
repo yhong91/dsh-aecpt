@@ -122,6 +122,9 @@ function GuideModal({ onClose, onDone, account, defaultServerUrl }) {
   const [serverInput, setServerInput] = useState(account?.serverUrl || defaultServerUrl || '');
   const [authUrl, setAuthUrl] = useState('');
   const [state, setState] = useState('');
+  const [autoPoll, setAutoPoll] = useState(false);
+  const [pollIntervalMs, setPollIntervalMs] = useState(2000);
+  const [waiting, setWaiting] = useState(false);
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
@@ -132,6 +135,58 @@ function GuideModal({ onClose, onDone, account, defaultServerUrl }) {
   useDialogAccessibility(dialogRef, { canClose: !busy && !mismatch, onClose });
   const parsedServer = parseClientServerInput(serverInput);
 
+  useEffect(() => {
+    if (!state || !autoPoll || !waiting || mismatch) return undefined;
+    let active = true;
+    let timer = null;
+    const tick = async () => {
+      if (!active) return;
+      try {
+        const res = await api('/authorize/poll', {
+          method: 'POST',
+          body: JSON.stringify({ state }),
+        });
+        if (!active) return;
+        if (res.status === 'connected') {
+          setWaiting(false);
+          onDone();
+          return;
+        }
+        if (res.status === 'account_mismatch') {
+          setWaiting(false);
+          setMismatch({ previous: res.previous, incoming: res.incoming });
+          return;
+        }
+        if (res.status === 'denied') {
+          setWaiting(false);
+          setError('你取消了浏览器授权，如需连接请重新发起。');
+          return;
+        }
+        if (res.status === 'expired') {
+          setWaiting(false);
+          setError('本次授权会话已过期，请点击重新打开浏览器授权。');
+          return;
+        }
+        if (res.status === 'manual_only') {
+          setAutoPoll(false);
+          setWaiting(false);
+          return;
+        }
+        const nextDelay = Number(res.poll_interval_ms) >= 1000 ? Number(res.poll_interval_ms) : pollIntervalMs;
+        timer = setTimeout(tick, nextDelay);
+      } catch (e) {
+        if (!active) return;
+        setWaiting(false);
+        setError(String(e.message || e));
+      }
+    };
+    timer = setTimeout(tick, Math.min(1500, pollIntervalMs));
+    return () => {
+      active = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [state, autoPoll, waiting, mismatch, pollIntervalMs, onDone]);
+
   const start = useCallback(async () => {
     setBusy(true); setError(''); setNote('');
     try {
@@ -139,14 +194,19 @@ function GuideModal({ onClose, onDone, account, defaultServerUrl }) {
         method: 'POST',
         body: JSON.stringify({ serverUrl: serverInput }),
       });
-      setAuthUrl(r.authorize_url); setState(r.state); setCode('');
+      setAuthUrl(r.authorize_url);
+      setState(r.state);
+      setAutoPoll(Boolean(r.auto_poll));
+      setPollIntervalMs(Number(r.poll_interval_ms) || 2000);
+      setWaiting(Boolean(r.auto_poll));
+      setCode('');
       window.open(r.authorize_url, '_blank');
     } catch (e) { setError(String(e.message || e)); }
     finally { setBusy(false); }
   }, [serverInput]);
 
   const complete = useCallback(async () => {
-    setBusy(true); setError('');
+    setBusy(true); setError(''); setWaiting(false);
     try {
       await api('/authorize/complete', { method: 'POST', body: JSON.stringify({ code, state }) });
       onDone();
@@ -162,7 +222,7 @@ function GuideModal({ onClose, onDone, account, defaultServerUrl }) {
     try {
       await api('/authorize/confirm', { method: 'POST', body: JSON.stringify({ state, choice }) });
       if (choice === 'switch') { onDone(); return; }
-      setMismatch(null); setAuthUrl(''); setState(''); setCode('');
+      setMismatch(null); setAuthUrl(''); setState(''); setCode(''); setWaiting(false); setAutoPoll(false);
       setNote('已取消。请在授权页先切换到 ' + accountLabel(mismatch?.previous) + '，再重新授权。');
     } catch (e) { setError(String(e.message || e)); }
     finally { setBusy(false); }
@@ -187,10 +247,19 @@ function GuideModal({ onClose, onDone, account, defaultServerUrl }) {
             '取消，用 ' + accountLabel(previous) + ' 重新授权'))));
   }
 
+  const manualBox = h('div', { style: { marginTop: 8 } },
+    h('p', { style: { marginBottom: 6, fontSize: 13 } }, '粘贴授权页面显示的一次性代码：'),
+    h('input', { className: 'aecpt-wb-input', placeholder: '粘贴一次性代码', value: code, onChange: e => setCode(e.target.value) }),
+    h('button', { type: 'button', className: 'aecpt-wb-btn', style: { marginTop: 8 }, disabled: busy || !code.trim() || !state, onClick: complete }, '完成连接'));
+
+  const startLabel = authUrl
+    ? '重新打开浏览器'
+    : (parsedServer.invitationUrl ? '前往浏览器注册 / 授权' : '打开浏览器授权');
+
   return h('div', { className: 'aecpt-wb-scrim', onClick: e => { if (e.target === e.currentTarget && !busy) onClose(); } },
     h('div', { ref: dialogRef, tabIndex: -1, className: 'aecpt-wb-modal', role: 'dialog', 'aria-modal': true, 'aria-label': '连接 AeCpt 工作台' },
       h('h3', { style: { marginBottom: 6, fontSize: 16 } }, account?.authExpired ? '重新授权 AeCpt 工作台' : '连接 AeCpt 工作台'),
-      h('p', { className: 'aecpt-wb-muted' }, '粘贴导师发来的邀请链接即可自动映射服务器地址。密码只提交给工作台服务器，不经过 DSH。'),
+      h('p', { className: 'aecpt-wb-muted' }, '粘贴导师邀请链接即可自动识别服务器；在浏览器完成注册或登录后自动连接，密码不经过 DSH。'),
       account && h('p', { className: 'aecpt-wb-banner', style: { marginTop: 10 } }, '本机缓存属于 ' + accountLabel(account) +
         '。如果浏览器自动登录了其他账号，请先在授权页切换账号。'),
       note && h('p', { className: 'aecpt-wb-muted', role: 'status', style: { marginTop: 8 } }, note),
@@ -203,28 +272,23 @@ function GuideModal({ onClose, onDone, account, defaultServerUrl }) {
             placeholder: '如 https://your-server/invitations/...',
             value: serverInput,
             disabled: busy,
-            onChange: e => { setServerInput(e.target.value); setAuthUrl(''); setState(''); setError(''); },
+            onChange: e => { setServerInput(e.target.value); setAuthUrl(''); setState(''); setWaiting(false); setAutoPoll(false); setError(''); },
           }),
           parsedServer.serverUrl && h('p', { className: 'aecpt-wb-muted', style: { marginTop: 6, overflowWrap: 'anywhere' } },
-            '已识别服务器：' + parsedServer.serverUrl),
-          parsedServer.invitationUrl && h('p', { className: 'aecpt-wb-muted', style: { marginTop: 4 } },
-            '首次使用还没注册？',
-            h('a', { className: 'aecpt-wb-link', href: parsedServer.invitationUrl, target: '_blank', rel: 'noreferrer' },
-              '先打开此邀请链接注册并接受邀请')),
+            '已识别服务器：' + parsedServer.serverUrl + (parsedServer.invitationUrl ? '（将自动串联注册、接受邀请与授权）' : '')),
           parsedServer.error && h('p', { className: 'aecpt-wb-error', style: { marginTop: 6 } }, parsedServer.error))),
       h('div', { className: 'aecpt-wb-step' },
         h('span', { className: 'aecpt-wb-step-num' }, '2'),
         h('div', { style: { flex: 1, minWidth: 0 } },
-          h('button', { type: 'button', className: 'aecpt-wb-btn', disabled: busy || !parsedServer.serverUrl, onClick: start },
-            authUrl ? '重新打开授权页面' : '打开授权页面'),
+          h('button', { type: 'button', className: 'aecpt-wb-btn', disabled: busy || !parsedServer.serverUrl, onClick: start }, startLabel),
+          waiting && h('p', { className: 'aecpt-wb-notice', role: 'status', style: { marginTop: 10 } },
+            '正在等待浏览器中完成授权… 完成后此窗口会自动连接，无需复制代码。'),
           authUrl && h('p', { className: 'aecpt-wb-muted', style: { marginTop: 6 } },
-            '若浏览器未自动打开，请手动复制：', h('a', { className: 'aecpt-wb-link', href: authUrl, target: '_blank', rel: 'noreferrer' }, authUrl)))),
-      h('div', { className: 'aecpt-wb-step' },
-        h('span', { className: 'aecpt-wb-step-num' }, '3'),
-        h('div', { style: { flex: 1, minWidth: 0 } },
-          h('p', { style: { marginBottom: 6, fontSize: 13 } }, '在页面用学号登录后，复制显示的一次性代码：'),
-          h('input', { className: 'aecpt-wb-input', placeholder: '粘贴一次性代码', value: code, onChange: e => setCode(e.target.value) }),
-          h('button', { type: 'button', className: 'aecpt-wb-btn', style: { marginTop: 8 }, disabled: busy || !code.trim() || !state, onClick: complete }, '完成连接'))),
+            '若浏览器未自动打开，请点此打开：', h('a', { className: 'aecpt-wb-link', href: authUrl, target: '_blank', rel: 'noreferrer' }, '在浏览器打开授权页')),
+          authUrl && !autoPoll && manualBox,
+          authUrl && autoPoll && h('details', { style: { marginTop: 10 } },
+            h('summary', { className: 'aecpt-wb-muted', style: { cursor: 'pointer' } }, '未能自动完成？手动粘贴一次性代码'),
+            manualBox))),
       error && h('p', { className: 'aecpt-wb-error', role: 'alert', style: { marginTop: 8 } }, error),
       h('div', { style: { textAlign: 'right', marginTop: 12 } },
         h('button', { type: 'button', className: 'aecpt-wb-btn-ghost', disabled: busy, onClick: onClose }, '取消'))));

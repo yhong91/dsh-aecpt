@@ -34,7 +34,8 @@ import {
 import {
   DEFAULT_SERVER_URL, ProxyError, normalizeBase, parseServerInput, resolveServerBase,
   parseBody, apiError,
-  pkcePair, authorizeUrl, exchangeAndMint, fetchProfile, revokeToken,
+  pkcePair, authorizeUrl, buildEntryAuthUrl, createAuthSession, pollAuthSession,
+  exchangeAndMint, fetchProfile, revokeToken,
   bindingFromPayload, sameAccount, describeAccount, readBinding,
   deleteBindingRecords, changeBinding, previousAccount, commitBinding, commitFromTool,
   upgradeLegacyBinding,
@@ -60,15 +61,49 @@ function prunePending() {
   }
 }
 
-function startPending(base) {
+async function startPending(base, { invitationUrl = '' } = {}) {
   prunePending()
   if (pendingAuth.size >= MAX_PENDING_AUTH) {
     throw new ProxyError(429, 'too_many_auth_attempts', '待完成的授权过多，请稍后再试')
   }
-  const state = randomBytes(16).toString('hex')
+  const state = randomBytes(24).toString('base64url')
   const { verifier, challenge } = pkcePair()
-  pendingAuth.set(state, { verifier, base, createdAt: Date.now(), inFlight: false, staged: null })
-  return { authorize_url: authorizeUrl(base, state, challenge), state }
+  const session = await createAuthSession(base, state)
+  const pollSecret = session?.pollSecret || ''
+  const pollIntervalMs = session?.pollIntervalMs || 2000
+  pendingAuth.set(state, {
+    verifier,
+    base,
+    pollSecret,
+    pollIntervalMs,
+    createdAt: Date.now(),
+    inFlight: false,
+    staged: null,
+  })
+  return {
+    authorize_url: buildEntryAuthUrl(base, state, challenge, invitationUrl),
+    state,
+    auto_poll: Boolean(pollSecret),
+    poll_interval_ms: pollIntervalMs,
+  }
+}
+
+async function finalizePendingAuthorization(ctx, config, stateKey, entry, code) {
+  const minted = await exchangeAndMint(entry.base, code, entry.verifier)
+  const incoming = { ...(await fetchProfile(entry.base, minted.token)), serverUrl: entry.base }
+  const previous = await previousAccount(ctx, config)
+  if (previous && !sameAccount(previous, incoming)) {
+    // Hold the new token until the user explicitly keeps or discards it.
+    entry.staged = { minted, profile: incoming, previous }
+    throw new ProxyError(409, 'account_mismatch', '授权的账号与本机缓存的账号不同', {
+      previous: describeAccount(previous),
+      incoming: describeAccount(incoming),
+    })
+  }
+  const result = await commitBinding(ctx, entry.base, minted, incoming)
+  pendingAuth.delete(stateKey)
+  clearPending()
+  return result
 }
 
 function clearPending() {
@@ -373,8 +408,58 @@ function makeProxy(ctx, config) {
         const binding = await readBinding(ctx, config)
         const cached = lastAccount()
         const rawInput = body.serverUrl ?? body.inviteUrl ?? body.input ?? ''
-        const base = resolveServerBase(rawInput, binding?.serverUrl, cached?.serverUrl, config?.serverUrl)
-        return send(200, { ...startPending(base), server_url: base })
+        const parsed = String(rawInput || '').trim() ? parseServerInput(rawInput) : { serverUrl: '', invitationUrl: '' }
+        const base = parsed.serverUrl || resolveServerBase('', binding?.serverUrl, cached?.serverUrl, config?.serverUrl)
+        const started = await startPending(base, { invitationUrl: parsed.invitationUrl })
+        return send(200, { ...started, server_url: base, has_invitation: Boolean(parsed.invitationUrl) })
+      }
+      if (sub === '/authorize/poll' && method === 'POST') {
+        const body = await readJsonBody(req)
+        prunePending()
+        const stateKey = String(body.state || '').trim()
+        const entry = stateKey ? pendingAuth.get(stateKey) : undefined
+        if (!entry) return send(200, { status: 'expired' })
+        if (entry.staged) {
+          return send(200, {
+            status: 'account_mismatch',
+            previous: describeAccount(entry.staged.previous),
+            incoming: describeAccount(entry.staged.profile),
+          })
+        }
+        if (entry.inFlight) return send(200, { status: 'pending', poll_interval_ms: entry.pollIntervalMs })
+        if (!entry.pollSecret) return send(200, { status: 'manual_only' })
+        let polled
+        try {
+          polled = await pollAuthSession(entry.base, stateKey, entry.pollSecret)
+        } catch {
+          return send(200, { status: 'pending', poll_interval_ms: entry.pollIntervalMs })
+        }
+        if (polled.status === 'pending') {
+          return send(200, { status: 'pending', poll_interval_ms: polled.poll_interval_ms || entry.pollIntervalMs })
+        }
+        if (polled.status === 'expired') {
+          pendingAuth.delete(stateKey)
+          return send(200, { status: 'expired' })
+        }
+        if (polled.status === 'denied') {
+          pendingAuth.delete(stateKey)
+          return send(200, { status: 'denied', error: polled.error || 'access_denied' })
+        }
+        if (polled.status === 'authorized' && typeof polled.code === 'string' && polled.code.trim()) {
+          entry.inFlight = true
+          try {
+            const result = await finalizePendingAuthorization(ctx, config, stateKey, entry, polled.code.trim())
+            return send(200, { status: 'connected', ...result })
+          } catch (err) {
+            if (err instanceof ProxyError && err.code === 'account_mismatch') {
+              return send(200, { status: 'account_mismatch', ...err.extra })
+            }
+            throw err
+          } finally {
+            entry.inFlight = false
+          }
+        }
+        return send(200, { status: 'expired' })
       }
       if (sub === '/authorize/complete' && method === 'POST') {
         const body = await readJsonBody(req)
@@ -386,20 +471,7 @@ function makeProxy(ctx, config) {
         if (!code || code.length > 512) throw new ProxyError(400, 'invalid_auth_code', '请粘贴授权页面显示的一次性代码')
         entry.inFlight = true
         try {
-          const minted = await exchangeAndMint(entry.base, code, entry.verifier)
-          const incoming = { ...(await fetchProfile(entry.base, minted.token)), serverUrl: entry.base }
-          const previous = await previousAccount(ctx, config)
-          if (previous && !sameAccount(previous, incoming)) {
-            // Hold the new token until the user explicitly keeps or discards it.
-            entry.staged = { minted, profile: incoming }
-            throw new ProxyError(409, 'account_mismatch', '授权的账号与本机缓存的账号不同', {
-              previous: describeAccount(previous),
-              incoming: describeAccount(incoming),
-            })
-          }
-          const result = await commitBinding(ctx, entry.base, minted, incoming)
-          pendingAuth.delete(body.state)
-          clearPending()
+          const result = await finalizePendingAuthorization(ctx, config, body.state, entry, code)
           return send(200, result)
         } finally {
           entry.inFlight = false
@@ -1098,8 +1170,10 @@ export async function apply(ctx, config) {
     async execute(args, _exec) {
       const binding = await readBinding(ctx, config)
       const cached = lastAccount()
-      const base = resolveServerBase(args?.serverUrl, binding?.serverUrl, cached?.serverUrl, config?.serverUrl)
-      return { ...startPending(base), server_url: base }
+      const parsed = String(args?.serverUrl || '').trim() ? parseServerInput(args.serverUrl) : { serverUrl: '', invitationUrl: '' }
+      const base = parsed.serverUrl || resolveServerBase('', binding?.serverUrl, cached?.serverUrl, config?.serverUrl)
+      const { authorize_url, state } = await startPending(base, { invitationUrl: parsed.invitationUrl })
+      return { authorize_url, state, server_url: base }
     },
   })
 

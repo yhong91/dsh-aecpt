@@ -74,20 +74,119 @@ test('server URL is never hardcoded and maps cleanly from supervisor invitation 
   assert.equal(missing.status, 400)
   assert.equal((await missing.json()).error.code, 'server_url_required')
 
-  // Start with supervisor invitation link -> extracts server origin automatically
-  const inviteLink = 'https://lab.example.edu:8768/invitations/AbCdEfGhIjKlMnOpQrStUvWxYz01234567890123456/'
+  // Start with supervisor invitation link -> extracts server origin and builds one-hop invitation URL
+  const inviteLink = 'http://127.0.0.1:1/invitations/AbCdEfGhIjKlMnOpQrStUvWxYz01234567890123456/'
   const started = await fetch(`${base}/authorize/start`, {
     method: 'POST', headers, body: JSON.stringify({ serverUrl: inviteLink }),
   })
   assert.equal(started.status, 200)
   const startedBody = await started.json()
-  assert.equal(startedBody.server_url, 'https://lab.example.edu:8768')
-  assert.ok(startedBody.authorize_url.startsWith('https://lab.example.edu:8768/oauth/authorize/?'))
+  assert.equal(startedBody.server_url, 'http://127.0.0.1:1')
+  assert.equal(startedBody.has_invitation, true)
+  const parsedAuth = new URL(startedBody.authorize_url)
+  assert.equal(parsedAuth.pathname, '/invitations/AbCdEfGhIjKlMnOpQrStUvWxYz01234567890123456/')
+  assert.ok((parsedAuth.searchParams.get('oauth_next') || '').startsWith('/oauth/authorize/?'))
+
+  // Bare server URL goes straight to /oauth/authorize/
+  const bareStarted = await fetch(`${base}/authorize/start`, {
+    method: 'POST', headers, body: JSON.stringify({ serverUrl: 'http://127.0.0.1:1' }),
+  })
+  const bareBody = await bareStarted.json()
+  assert.ok(bareBody.authorize_url.startsWith('http://127.0.0.1:1/oauth/authorize/?'))
 
   // Agent tool aecpt_authorize also accepts a supervisor invitation link directly
   const toolRes = await tools.get('aecpt_authorize').execute({ serverUrl: inviteLink }, {})
-  assert.equal(toolRes.server_url, 'https://lab.example.edu:8768')
-  assert.ok(toolRes.authorize_url.startsWith('https://lab.example.edu:8768/oauth/authorize/?'))
+  assert.equal(toolRes.server_url, 'http://127.0.0.1:1')
+  assert.ok(toolRes.authorize_url.includes('/invitations/AbCdEfGhIjKlMnOpQrStUvWxYz01234567890123456/?oauth_next='))
+})
+
+test('Scheme B PKCE polling auto-connects without manual code copy/paste', async t => {
+  const sessions = new Map()
+  let readyCode = ''
+  const upstream = await listen(async (req, res) => {
+    const chunks = []
+    for await (const c of req) chunks.push(c)
+    const raw = Buffer.concat(chunks).toString('utf8')
+    const url = new URL(req.url, 'http://127.0.0.1')
+    const json = (status, data) => {
+      res.writeHead(status, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(data))
+    }
+    if (url.pathname === '/api/v1/auth/plugin-sessions/' && req.method === 'POST') {
+      const { state } = JSON.parse(raw)
+      const pollSecret = 'poll_secret_0123456789abcdef0123456789ab'
+      sessions.set(state, { pollSecret })
+      return json(201, { poll_secret: pollSecret, poll_interval_ms: 1500 })
+    }
+    if (url.pathname === '/api/v1/auth/plugin-sessions/poll/' && req.method === 'POST') {
+      const { state, poll_secret } = JSON.parse(raw)
+      const s = sessions.get(state)
+      if (!s || s.pollSecret !== poll_secret) return json(200, { status: 'expired' })
+      if (!readyCode) return json(200, { status: 'pending', poll_interval_ms: 1500 })
+      const delivered = readyCode
+      readyCode = ''
+      sessions.delete(state)
+      return json(200, { status: 'authorized', code: delivered })
+    }
+    if (url.pathname === '/oauth/token/' && req.method === 'POST') {
+      assert.ok(raw.includes('code=auto_code_777'))
+      return json(200, { access_token: 'oauth_tok_auto' })
+    }
+    if (url.pathname === '/api/v1/auth/tokens/exchange/' && req.method === 'POST') {
+      return json(201, { id: 42, token: 'aec_auto_minted_token' })
+    }
+    if (url.pathname === '/api/v1/me/' && req.method === 'GET') {
+      return json(200, {
+        id: 101, username: 's_auto01', full_name: '自动授权学生',
+        student_number: '2026888', is_student: true, server_instance: 'inst-auto-1',
+      })
+    }
+    return json(404, { error: { code: 'not_found' } })
+  })
+  t.after(() => upstream.close())
+  const upstreamOrigin = `http://127.0.0.1:${upstream.address().port}`
+
+  const records = new Map()
+  let route
+  const disposers = []
+  await apply({
+    get(k) { return k === 'webServer' ? { register(r) { route = r; return () => {} } } : undefined },
+    credentials: {
+      async readRecord(k) { return records.get(k) ?? null },
+      async modifyRecord(k, fn) { records.set(k, await fn(records.get(k))) },
+      async deleteRecord(k) { records.delete(k) },
+    },
+    effect(fn) { disposers.push(fn()) },
+    tools: { register() {} },
+  }, {})
+  t.after(() => { for (const d of disposers) d?.() })
+
+  const proxy = await listen(route.handler)
+  t.after(() => proxy.close())
+  const base = `http://127.0.0.1:${proxy.address().port}/aecpt-api`
+  const headers = { 'X-AeCpt-Client': '1', 'Content-Type': 'application/json' }
+
+  const invite = `${upstreamOrigin}/invitations/AbCdEfGhIjKlMnOpQrStUvWxYz01234567890123456/`
+  const startRes = await (await fetch(`${base}/authorize/start`, {
+    method: 'POST', headers, body: JSON.stringify({ serverUrl: invite }),
+  })).json()
+  assert.equal(startRes.auto_poll, true)
+  assert.equal(startRes.poll_interval_ms, 1500)
+
+  // Before browser consent -> pending
+  const p1 = await (await fetch(`${base}/authorize/poll`, {
+    method: 'POST', headers, body: JSON.stringify({ state: startRes.state }),
+  })).json()
+  assert.equal(p1.status, 'pending')
+
+  // Browser completes consent -> poll auto-exchanges and stores binding!
+  readyCode = 'auto_code_777'
+  const p2 = await (await fetch(`${base}/authorize/poll`, {
+    method: 'POST', headers, body: JSON.stringify({ state: startRes.state }),
+  })).json()
+  assert.equal(p2.status, 'connected')
+  assert.equal(p2.username, 's_auto01')
+  assert.equal(records.get('dsh-aecpt/default')?.payload?.token, 'aec_auto_minted_token')
 })
 
 test('prompts.js handles custom overrides, multi-week compile span, and incremental fusion without reviving deleted text', () => {

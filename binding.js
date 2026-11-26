@@ -94,7 +94,7 @@ export function pkcePair() {
   return { verifier, challenge }
 }
 
-export function authorizeUrl(base, state, challenge) {
+export function authorizePath(base, state, challenge) {
   const params = new URLSearchParams({
     client_id: CLIENT_ID,
     response_type: 'code',
@@ -104,7 +104,70 @@ export function authorizeUrl(base, state, challenge) {
     code_challenge: challenge,
     code_challenge_method: 'S256',
   })
-  return `${base}/oauth/authorize/?${params.toString()}`
+  return `/oauth/authorize/?${params.toString()}`
+}
+
+export function authorizeUrl(base, state, challenge) {
+  return `${base}${authorizePath(base, state, challenge)}`
+}
+
+/** Build the single browser entry URL: when the user pasted an invitation link
+ * on the same server, chain `/invitations/<token>/?oauth_next=/oauth/authorize/...`
+ * so registration, invitation acceptance, and OAuth consent happen in one hop. */
+export function buildEntryAuthUrl(base, state, challenge, invitationUrl = '') {
+  const oauthPath = authorizePath(base, state, challenge)
+  const rawInv = String(invitationUrl || '').trim()
+  if (rawInv) {
+    try {
+      const inv = new URL(rawInv)
+      if (inv.origin === base) {
+        const cleanPath = inv.pathname.replace(/\/register\/?$/, '/').replace(/\/?$/, '/')
+        const params = new URLSearchParams({ oauth_next: oauthPath })
+        return `${base}${cleanPath}?${params.toString()}`
+      }
+    } catch {
+      // Fall back to direct OAuth authorize URL.
+    }
+  }
+  return `${base}${oauthPath}`
+}
+
+/** Register a short-lived server-side PKCE polling session so the plugin can
+ * finish connecting without asking the user to copy/paste a code. Returns null
+ * when talking to an older server that only supports manual paste. */
+export async function createAuthSession(base, state, signal) {
+  try {
+    const res = await fetch(`${base}/api/v1/auth/plugin-sessions/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ state }),
+      redirect: 'error',
+      signal: signal ?? AbortSignal.timeout(5_000),
+    })
+    if (!res.ok) return null
+    const { data } = await parseBody(res)
+    if (typeof data?.poll_secret !== 'string' || !data.poll_secret) return null
+    const interval = Number(data.poll_interval_ms)
+    return {
+      pollSecret: data.poll_secret,
+      pollIntervalMs: Number.isFinite(interval) && interval >= 1000 ? Math.min(interval, 10_000) : 2000,
+    }
+  } catch {
+    return null
+  }
+}
+
+export async function pollAuthSession(base, state, pollSecret, signal) {
+  const res = await fetch(`${base}/api/v1/auth/plugin-sessions/poll/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ state, poll_secret: pollSecret }),
+    redirect: 'error',
+    signal: signal ?? AbortSignal.timeout(10_000),
+  })
+  const body = await parseBody(res)
+  if (!res.ok) throw apiError(res, body.data, body.text)
+  return body.data || { status: 'expired' }
 }
 
 /** Exchange the authorization code (PKCE) and swap the OAuth token for an

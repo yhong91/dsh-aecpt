@@ -23,7 +23,9 @@
 | --- | --- |
 | `GET /api/v1/health/` | （公开）健康检查，返回 `{"status": "ok"}` |
 | `GET /api/v1/meta/` | （公开）发现服务端 API 版本、`server_instance`、OAuth 路径及全部字段/体积/配额上限（客制化请优先读取此接口，避免硬编码上限） |
-| `GET /oauth/authorize/` | 浏览器 OAuth 2.0 PKCE（`S256`）登录与授权页（`client_id=aecpt-dsh-plugin`，`scope=api`，`redirect_uri=<origin>/oauth/plugin-done/`） |
+| `GET /oauth/authorize/` | 浏览器 OAuth 2.0 PKCE（`S256`）登录与授权页（`client_id=aecpt-dsh-plugin`，`scope=api`，`redirect_uri=<origin>/oauth/plugin-done/`）；支持经 `/invitations/<token>/?oauth_next=/oauth/authorize/...` 一跳串联注册、入组与授权 |
+| `POST /api/v1/auth/plugin-sessions/` | （公开）注册短期 PKCE 轮询会话（传入 `state`，返回一次性 `poll_secret` 与轮询间隔），用于浏览器授权后免复制代码自动连接 |
+| `POST /api/v1/auth/plugin-sessions/poll/` | （公开）提交 `state` + `poll_secret` 轮询授权结果，阅后即焚返回一次性授权码 |
 | `POST /oauth/token/` | 使用一次性授权码 + `code_verifier` 换取 5 分钟短效 OAuth Access Token |
 | `POST /api/v1/auth/tokens/exchange/` | 用上述 OAuth Access Token 一次性换取长期 `ApiToken`（90 天滑动续期，单人最多 10 个活跃令牌；换票后原 OAuth Token 立即销毁） |
 | `POST /api/v1/auth/tokens/current/revoke/` | 吊销当前正在使用的 `ApiToken`（断开连接时调用） |
@@ -106,7 +108,7 @@
 
 前端面板（`client.js` 及各 `*-panel.js`）通过同源 `/aecpt-api/*` 与 Host 通信，携带请求头 `X-AeCpt-Client: 1` 及（已连接时的）`X-AeCpt-Binding: <bindingId>`：
 
-- **连接与授权**：`GET /status`、`GET /connection/`、`POST /authorize/start`、`POST /authorize/complete`、`POST /authorize/confirm`、`POST /disconnect`
+- **连接与授权**：`GET /status`、`GET /connection/`、`POST /authorize/start`、`POST /authorize/poll`、`POST /authorize/complete`、`POST /authorize/confirm`、`POST /disconnect`
 - **AI 总结与周报提炼**：`GET /summary-models`、`POST /summary-model`、`GET /summarize/context?sessionId=...`、`POST /summarize`、`POST /reports/summaries/`、`DELETE /reports/:id/summaries/:recordId/`、`POST /reports/:id/compile/`、`POST /reports/:id/undo-compile/`
 - **离线优先周报**：`GET/POST /reports/`、`GET/PATCH /reports/:id/`、`POST /reports/:id/submit/`、`POST /reports/:id/resolve/`、`POST /reports/sync/`、`GET /export?id=...`
 - **本机文献订阅**：`GET /feeds/`、`POST /feeds/sources/`、`DELETE /feeds/sources/:id/`、`POST /feeds/refresh`、`POST /feeds/read`
