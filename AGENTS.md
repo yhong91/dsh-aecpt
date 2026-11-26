@@ -17,7 +17,9 @@ be chosen before contributors can open remote pull requests.
 
 ## Status
 
-v0.1.1 (2026-11-26, ready to release): Added Scheme B zero-copy-paste PKCE auto-polling (`/authorize/poll` + `POST /api/v1/auth/plugin-sessions/`) and one-hop invitation chaining (`/invitations/<token>/?oauth_next=/oauth/authorize/...`) so students paste a supervisor invitation link, click once to register/accept/authorize in browser, and return to an already-connected workbench (with collapsible manual one-time code fallback); replaced the header Settings text button with a gear icon button (`44/44` tests).
+v0.1.2 (2026-11-26, ready to release): Fixed all 8 `ctx.tools.register` tool `parameters` to emit standard JSON Schema Draft 2020-12 (`{ type: "object", additionalProperties: false, properties: {...}, required?: [...] }`), removing the uncompiled DSH shorthand map (whose root-level `title` parameter on `aecpt_library`/`aecpt_plan` and missing root `type: "object"` triggered HTTP 400 on strict LLM gateways), and added regression tests validating every registered tool's JSON Schema.
+
+v0.1.1 (2026-11-26, published on npm): Added Scheme B zero-copy-paste PKCE auto-polling (`/authorize/poll` + `POST /api/v1/auth/plugin-sessions/`) and one-hop invitation chaining (`/invitations/<token>/?oauth_next=/oauth/authorize/...`) so students paste a supervisor invitation link, click once to register/accept/authorize in browser, and return to an already-connected workbench (with collapsible manual one-time code fallback); replaced the header Settings text button with a gear icon button (`44/44` tests).
 
 v0.1.0 (2026-11-25, initial public release baseline + GitHub Actions): Reset all package versions to `0.1.0` for initial public release and added GitHub Actions workflows: `.github/workflows/ci.yml` (syntax check, build, unit tests, `npm pack --dry-run` on `main` push/PR) and `.github/workflows/publish-npm.yml` (tag/version guard, automatic `repository` metadata injection for `--provenance` on public repos, prerelease `next` tag handling, dual OIDC Trusted Publishing / `NPM_TOKEN` npm publish, and automatic GitHub Release creation).
 

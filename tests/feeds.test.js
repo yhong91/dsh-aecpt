@@ -143,7 +143,7 @@ test('subscribe, refresh, read and manage feeds through the proxy', async t => {
   // Agent tool lists both source ids and entries.
   const feedsTool = tools.get('aecpt_feeds');
   assert.ok(feedsTool);
-  assert.ok(!feedsTool.parameters.action.enum.includes('cite'));
+  assert.ok(!feedsTool.parameters.properties.action.enum.includes('cite'));
   const toolList = await feedsTool.execute({ action: 'list', unread: true }, {});
   assert.match(toolList.text, new RegExp(arxiv.id));
   assert.match(toolList.text, /Interfaces that feel right/);

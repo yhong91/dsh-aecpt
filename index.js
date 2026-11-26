@@ -1146,9 +1146,13 @@ export async function apply(ctx, config) {
       + 'a username or student number, approves access, and copies the one-time code '
       + 'shown there. Then call aecpt_authorize_complete with that code.',
     parameters: {
-      serverUrl: {
-        type: 'string',
-        description: 'Supervisor invitation link (e.g. https://.../invitations/...) or server base URL. Optional if previously connected or configured.',
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        serverUrl: {
+          type: 'string',
+          description: 'Supervisor invitation link (e.g. https://.../invitations/...) or server base URL. Optional if previously connected or configured.',
+        },
       },
     },
     output: {
@@ -1184,8 +1188,13 @@ export async function apply(ctx, config) {
       + 'page for an API token stored in the DSH credential store. The code is single-use. '
       + 'Switching to a different account than the one cached on this device is only possible from the AeCpt panel.',
     parameters: {
-      code: { type: 'string', required: true, description: 'The one-time code displayed on the workbench authorization page.' },
-      state: { type: 'string', description: 'The state returned by aecpt_authorize; omit to use the most recent pending authorization.' },
+      type: 'object',
+      additionalProperties: false,
+      required: ['code'],
+      properties: {
+        code: { type: 'string', description: 'The one-time code displayed on the workbench authorization page.' },
+        state: { type: 'string', description: 'The state returned by aecpt_authorize; omit to use the most recent pending authorization.' },
+      },
     },
     output: {
       schema: {
@@ -1232,7 +1241,7 @@ export async function apply(ctx, config) {
   ctx.tools.register({
     name: 'aecpt_logout',
     description: 'Remove the stored aecpt binding from this DSH installation and revoke its token. Local cached drafts stay on this device.',
-    parameters: {},
+    parameters: { type: 'object', additionalProperties: false, properties: {} },
     output: {
       schema: {
         type: 'object',
@@ -1259,12 +1268,17 @@ export async function apply(ctx, config) {
       + 'remove (sourceId), refresh (all or one sourceId). Subscriptions are for browsing only and never '
       + 'modify progress drafts.',
     parameters: {
-      action: { type: 'string', required: true, enum: ['list', 'add', 'remove', 'refresh'], description: 'Which operation to run.' },
-      url: { type: 'string', description: 'Feed URL for add.' },
-      name: { type: 'string', description: 'Optional display name for add.' },
-      kind: { type: 'string', enum: ['journal', 'arxiv', 'blog'], description: 'Feed kind for add; defaults to journal.' },
-      sourceId: { type: 'string', description: 'Subscription id for remove/refresh and list filtering.' },
-      unread: { type: 'boolean', description: 'list only unread entries.' },
+      type: 'object',
+      additionalProperties: false,
+      required: ['action'],
+      properties: {
+        action: { type: 'string', enum: ['list', 'add', 'remove', 'refresh'], description: 'Which operation to run.' },
+        url: { type: 'string', description: 'Feed URL for add.' },
+        name: { type: 'string', description: 'Optional display name for add.' },
+        kind: { type: 'string', enum: ['journal', 'arxiv', 'blog'], description: 'Feed kind for add; defaults to journal.' },
+        sourceId: { type: 'string', description: 'Subscription id for remove/refresh and list filtering.' },
+        unread: { type: 'boolean', description: 'list only unread entries.' },
+      },
     },
     output: {
       schema: {
@@ -1323,21 +1337,26 @@ export async function apply(ctx, config) {
       + 'Student submissions only enter the shared library after a supervisor approves them; '
       + 'review and deletion are not available through this tool.',
     parameters: {
-      action: {
-        type: 'string', required: true,
-        enum: ['search', 'get', 'mine', 'resolve', 'submit', 'download', 'export'],
-        description: 'Which operation to run.',
+      type: 'object',
+      additionalProperties: false,
+      required: ['action'],
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['search', 'get', 'mine', 'resolve', 'submit', 'download', 'export'],
+          description: 'Which operation to run.',
+        },
+        q: { type: 'string', description: 'Search words for search/export (all must match title, authors, venue, DOI, arXiv id, abstract or tags).' },
+        tag: { type: 'string', description: 'Exact tag filter for search/export.' },
+        id: { type: 'integer', description: 'Paper id for get/download.' },
+        ids: { type: 'string', description: 'Comma-separated paper ids for export.' },
+        identifier: { type: 'string', description: 'DOI, doi.org URL, arXiv id or arxiv.org abs/pdf URL for resolve/submit.' },
+        title: { type: 'string', description: 'Title for a manual submit without identifier.' },
+        pdfPath: { type: 'string', description: 'Local PDF path for submit (~ allowed); required for DOI papers.' },
+        tags: { type: 'string', description: 'Comma-separated tags for submit.' },
+        note: { type: 'string', description: 'Recommendation reason shown to the supervisor and the group (submit).' },
+        path: { type: 'string', description: 'export: .bib file path inside the home directory (~ allowed).' },
       },
-      q: { type: 'string', description: 'Search words for search/export (all must match title, authors, venue, DOI, arXiv id, abstract or tags).' },
-      tag: { type: 'string', description: 'Exact tag filter for search/export.' },
-      id: { type: 'integer', description: 'Paper id for get/download.' },
-      ids: { type: 'string', description: 'Comma-separated paper ids for export.' },
-      identifier: { type: 'string', description: 'DOI, doi.org URL, arXiv id or arxiv.org abs/pdf URL for resolve/submit.' },
-      title: { type: 'string', description: 'Title for a manual submit without identifier.' },
-      pdfPath: { type: 'string', description: 'Local PDF path for submit (~ allowed); required for DOI papers.' },
-      tags: { type: 'string', description: 'Comma-separated tags for submit.' },
-      note: { type: 'string', description: 'Recommendation reason shown to the supervisor and the group (submit).' },
-      path: { type: 'string', description: 'export: .bib file path inside the home directory (~ allowed).' },
     },
     output: {
       schema: {
@@ -1445,7 +1464,7 @@ export async function apply(ctx, config) {
   ctx.tools.register({
     name: 'aecpt_me',
     description: 'Return the bound AeCpt identity, current FNU teaching week, and visible projects.',
-    parameters: {},
+    parameters: { type: 'object', additionalProperties: false, properties: {} },
     output: {
       schema: {
         type: 'object',
@@ -1513,18 +1532,22 @@ export async function apply(ctx, config) {
       + 'research/thesis projects with ids). Sharing a plan with a supervisor stays a manual action in the '
       + '计划 tab so private notes are never shared accidentally.',
     parameters: {
-      action: {
-        type: 'string',
-        required: true,
-        enum: ['list', 'create', 'update', 'projects'],
-        description: 'Which plan operation to run.',
+      type: 'object',
+      additionalProperties: false,
+      required: ['action'],
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['list', 'create', 'update', 'projects'],
+          description: 'Which plan operation to run.',
+        },
+        id: { type: 'integer', description: 'Plan item id; required for update.' },
+        done: { type: 'string', description: 'For list: open, done, or all (default all). For update/create: "true" or "false".' },
+        title: { type: 'string', description: 'Task title (required for create, optional for update).' },
+        notes: { type: 'string', description: 'Optional private notes for the task.' },
+        due_date: { type: 'string', description: 'Optional due date in YYYY-MM-DD format; empty string clears due_date on update.' },
+        project: { type: 'integer', description: 'Optional project id to link; pass 0 on update to unlink.' },
       },
-      id: { type: 'integer', description: 'Plan item id; required for update.' },
-      done: { type: 'string', description: 'For list: open, done, or all (default all). For update/create: "true" or "false".' },
-      title: { type: 'string', description: 'Task title (required for create, optional for update).' },
-      notes: { type: 'string', description: 'Optional private notes for the task.' },
-      due_date: { type: 'string', description: 'Optional due date in YYYY-MM-DD format; empty string clears due_date on update.' },
-      project: { type: 'integer', description: 'Optional project id to link; pass 0 on update to unlink.' },
     },
     output: {
       schema: {
@@ -1636,17 +1659,21 @@ export async function apply(ctx, config) {
       + 'edit (draft only; must pass current integer revision), '
       + 'submit (locks the report and uploads collected fragments; repeat calls are safe).',
     parameters: {
-      action: {
-        type: 'string',
-        required: true,
-        enum: ['list', 'detail', 'create', 'edit', 'submit', 'summaries', 'add_summary', 'periods'],
-        description: 'Which operation to run.',
+      type: 'object',
+      additionalProperties: false,
+      required: ['action'],
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['list', 'detail', 'create', 'edit', 'submit', 'summaries', 'add_summary', 'periods'],
+          description: 'Which operation to run.',
+        },
+        id: { type: 'integer', description: 'Report id; required for detail/edit/submit/summaries.' },
+        period: { type: 'string', description: 'FNU teaching week code like 26FA13W; required for create, optional for add_summary (defaults to current week).' },
+        project: { type: 'integer', description: 'Project id: optional on create, filter on list.' },
+        content: { type: 'string', description: 'Report body for create/edit, or fragment Markdown for add_summary.' },
+        revision: { type: 'integer', description: 'Expected current revision for edit; a mismatch answers 409 with the latest snapshot.' },
       },
-      id: { type: 'integer', description: 'Report id; required for detail/edit/submit/summaries.' },
-      period: { type: 'string', description: 'FNU teaching week code like 26FA13W; required for create, optional for add_summary (defaults to current week).' },
-      project: { type: 'integer', description: 'Project id: optional on create, filter on list.' },
-      content: { type: 'string', description: 'Report body for create/edit, or fragment Markdown for add_summary.' },
-      revision: { type: 'integer', description: 'Expected current revision for edit; a mismatch answers 409 with the latest snapshot.' },
     },
     output: {
       schema: {

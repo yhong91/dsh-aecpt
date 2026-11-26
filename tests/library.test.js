@@ -274,7 +274,7 @@ test('library proxy routes, submission relay and agent tool', async t => {
   const tool = tools.get('aecpt_library');
   assert.ok(tool);
   assert.match(tool.description, /supervisor approves/);
-  assert.ok(!tool.parameters.action.enum.includes('review'));
+  assert.ok(!tool.parameters.properties.action.enum.includes('review'));
   let out = await tool.execute({ action: 'search', q: 'aesthetic' }, {});
   assert.match(out.text, /#3 Computational Aesthetics/);
   out = await tool.execute({ action: 'mine' }, {});

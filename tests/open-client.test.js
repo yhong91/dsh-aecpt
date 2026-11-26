@@ -390,8 +390,46 @@ test('Host proxy forwards /meta/ and new/upgraded student tools (aecpt_me, aecpt
 
   // 4. Upgraded aecpt_report tool: periods, add_summary (auto period), summaries, and feedback removed
   const reportTool = tools.get('aecpt_report')
-  assert.equal(reportTool.parameters.action.enum.includes('feedback'), false)
+  assert.equal(reportTool.parameters.properties.action.enum.includes('feedback'), false)
   await assert.rejects(reportTool.execute({ action: 'feedback', id: 88, content: 'x' }, {}), /未知 action/)
+
+  // 5. All registered tools must emit standard JSON Schema Draft 2020-12 object parameters
+  assert.equal(tools.size, 8)
+  const validTypes = new Set(['string', 'integer', 'number', 'boolean', 'array', 'object', 'null'])
+  const checkSchema = (schema, path) => {
+    assert.equal(typeof schema, 'object', `${path}: schema must be an object`)
+    assert.ok(schema && !Array.isArray(schema), `${path}: schema must be a plain object`)
+    assert.ok(validTypes.has(schema.type), `${path}: invalid type ${JSON.stringify(schema.type)}`)
+    assert.notEqual(typeof schema.required, 'boolean', `${path}: boolean required is shorthand, not JSON Schema`)
+    if (schema.type === 'object') {
+      assert.equal(typeof schema.properties, 'object', `${path}: object schema missing properties`)
+      assert.ok(schema.properties && !Array.isArray(schema.properties), `${path}: properties must be a plain object`)
+      if (schema.required !== undefined) {
+        assert.ok(Array.isArray(schema.required), `${path}: required must be an array`)
+        for (const req of schema.required) {
+          assert.ok(Object.hasOwn(schema.properties, req), `${path}: required "${req}" missing from properties`)
+        }
+      }
+      for (const [key, prop] of Object.entries(schema.properties)) checkSchema(prop, `${path}.properties.${key}`)
+    }
+    if (schema.type === 'array') {
+      assert.ok(schema.items && typeof schema.items === 'object', `${path}: array schema missing items`)
+      checkSchema(schema.items, `${path}.items`)
+    }
+  }
+  const allowedRootKeys = new Set(['type', 'properties', 'required', 'additionalProperties', 'description'])
+  for (const [name, tool] of tools) {
+    assert.equal(tool.parameters.type, 'object', `${name}: root parameters.type must be "object"`)
+    assert.equal(tool.parameters.additionalProperties, false, `${name}: root additionalProperties must be false`)
+    for (const key of Object.keys(tool.parameters)) {
+      assert.ok(allowedRootKeys.has(key), `${name}: unexpected root schema keyword "${key}"`)
+    }
+    checkSchema(tool.parameters, `${name}.parameters`)
+  }
+  assert.equal('title' in tools.get('aecpt_library').parameters, false)
+  assert.equal(tools.get('aecpt_library').parameters.properties.title.type, 'string')
+  assert.equal('title' in tools.get('aecpt_plan').parameters, false)
+  assert.equal(tools.get('aecpt_plan').parameters.properties.title.type, 'string')
 
   const periods = await reportTool.execute({ action: 'periods' }, {})
   assert.equal(periods.periods.current.period, '26FA13W')
