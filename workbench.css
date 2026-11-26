@@ -156,6 +156,30 @@
 
 .aecpt-wb-btn-ghost:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
 
+.aecpt-wb-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.aecpt-wb-icon-btn:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.aecpt-wb-icon-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 :is(.aecpt-wb-btn, .aecpt-wb-btn-ghost):disabled {
   opacity: 0.5;
   cursor: default;

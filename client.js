@@ -230,6 +230,15 @@ function GuideModal({ onClose, onDone, account, defaultServerUrl }) {
         h('button', { type: 'button', className: 'aecpt-wb-btn-ghost', disabled: busy, onClick: onClose }, '取消'))));
 }
 
+function SettingsIcon({ size = 16 }) {
+  return h('svg', {
+    viewBox: '0 0 24 24', width: size, height: size, 'aria-hidden': true, fill: 'none',
+    stroke: 'currentColor', strokeWidth: 1.75, strokeLinecap: 'round', strokeLinejoin: 'round',
+  },
+    h('path', { d: 'M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z' }),
+    h('circle', { cx: 12, cy: 12, r: 3 }))
+}
+
 function ConnectionBadge({ api }) {
   const [state, setState] = useState('checking');
   const [checkedAt, setCheckedAt] = useState(null);
@@ -835,7 +844,7 @@ function Panel(props) {
             onClick: summarize, title: changedBody || reportView.current?.changedConflict
               ? '请先保存当前草稿修改' : `从当前对话提取进展片段并归入 ${period} 本周汇总`,
           }, summaryBusy ? '正在提取…' : '记入本周汇总'),
-          h('button', { type: 'button', className: 'aecpt-wb-btn-ghost', 'aria-label': '设置', onClick: () => setSettingsOpen(true) }, '设置'))),
+          h('button', { type: 'button', className: 'aecpt-wb-icon-btn', 'aria-label': '设置', title: '设置', onClick: () => setSettingsOpen(true) }, h(SettingsIcon)))),
       summaryNote && h('div', { className: 'aecpt-wb-notice', role: 'status', style: { marginBottom: 12 } },
         h('span', null, summaryNote)),
       status.authExpired && h('div', { className: 'aecpt-wb-banner', role: 'alert', style: { marginBottom: 12 } },
